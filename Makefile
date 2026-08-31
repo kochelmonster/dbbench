@@ -38,6 +38,11 @@ $(BINDIR)/t_lmdb: dbb.o t_lmdb.o
 $(BINDIR)/t_mdbx: dbb.o t_mdbx.o
 	$(CC) -o $@ $^ -Wl,-Bstatic -lmdbx -Wl,-Bdynamic -lsnappy -lm
 
+$(BINDIR)/t_leaves: dbb.o t_leaves.o
+	$(CXX) -o $@ $^
+t_leaves.o: t_leaves.cc
+	$(CXX) -c $(CFLAGS) -std=c++20 -I../leaves/include $^
+
 $(BINDIR)/t_leveldb: dbb.o t_leveldb.o
 	$(CXX) -o $@ $^ ../leveldb/out-static/libleveldb.a -lsnappy
 t_leveldb.o: t_leveldb.cc
