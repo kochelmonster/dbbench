@@ -575,21 +575,18 @@ static void killdb() {
 	}
 }
 
-static int db_open;
-
 static void Benchmark() {
 	PrintHeader();
 
 	char *benchmarks = (char *)FLAGS_benchmarks;
+	int db_open = 0;
 	DBB_global dg;
 
 	pthread_mutex_init(&dg.dg_mu, NULL);
 	pthread_cond_init(&dg.dg_cv, NULL);
 
 	if (!FLAGS_use_existing_db) {
-		dbb_backend->db_close();
 		killdb();
-		db_open = 0;
 	}
 	while (benchmarks != NULL) {
 		char *sep = strchr(benchmarks, ',');
@@ -694,17 +691,13 @@ static void Benchmark() {
 			if (system(cmd)) exit(1);
 		}
 	}
+	dbb_backend->db_close();
 	pthread_cond_destroy(&dg.dg_cv);
 	pthread_mutex_destroy(&dg.dg_mu);
 }
 
-static int benchflag(char *arg) {
-	FLAGS_benchmarks = arg;
-	return 1;
-}
-
 static arg_desc main_args[] = {
-	{ "benchmarks", arg_magic, benchflag },
+	{ "benchmarks", arg_string, &FLAGS_benchmarks },
 	{ "compression", arg_onoff, &FLAGS_compression },
 	{ "compression_ratio", arg_float, &FLAGS_compression_ratio },
 	{ "histogram", arg_onoff, &FLAGS_histogram },
@@ -726,10 +719,10 @@ static arg_desc main_args[] = {
 static char dirbuf[1024];
 
 int main2(int argc, char *argv[]) {
-	int i, aret;
+	int i;
 	arg_setup(main_args, dbb_backend->db_args);
-
-	while ((aret = arg_process(argc, argv)) >= 0) {
+	if (arg_process(argc, argv))
+		exit(1);
 
 	/* Choose a location for the test database if none given with --db=<path> */
 	if (FLAGS_db == NULL) {
@@ -755,28 +748,21 @@ int main2(int argc, char *argv[]) {
 	if (!FLAGS_max_threads)
 		FLAGS_max_threads = FLAGS_threads;
 
-	if (!seeds)
-		/* Set up an extra randctx */
-		seeds = calloc(FLAGS_max_threads+1, sizeof(rndctx *));
+	/* Set up an extra randctx */
+	seeds = calloc(FLAGS_max_threads+1, sizeof(rndctx *));
 	for (i=0; i<FLAGS_max_threads+1; i++)
-		if (!seeds[i]) seeds[i] = DBB_randctx();
+		seeds[i] = DBB_randctx();
 	DBB_srandom(seeds[0], 0);
 	for (i=1; i<FLAGS_threads+1; i++)
 		DBB_randjump(seeds[i-1], seeds[i]);
 
-	if (!hists)
-		hists = calloc(FLAGS_max_threads+1, sizeof(Hstctx *));
+	hists = calloc(FLAGS_max_threads+1, sizeof(Hstctx *));
 	for (i=0; i<FLAGS_max_threads+1; i++)
-		if (!hists[i]) hists[i] = DBB_hstctx();
+		hists[i] = DBB_hstctx();
 	for (i=0; i<FLAGS_threads+1; i++)
 		DBB_hstinit(hists[i]);
 
 	Benchmark();
-	if (!aret)
-		break;
-	}
-	if (db_open)
-		dbb_backend->db_close();
 	return 0;
 }
 
